@@ -31,6 +31,7 @@ class TestPrepareDevice(object):
         assert 'Cannot use device (/dev/var/foo)' in str(error)
         assert 'A vg/lv path or an existing device is needed' in str(error)
 
+
 class TestPrepare(object):
 
     def test_main_spits_help_with_no_arguments(self, capsys):
@@ -45,6 +46,30 @@ class TestPrepare(object):
         assert 'Use the filestore objectstore' in stdout
         assert 'Use the bluestore objectstore' in stdout
         assert 'A physical device or logical' in stdout
+
+    def test_excludes_filestore_bluestore_flags(self, is_root):
+        with pytest.raises(RuntimeError) as error:
+            lvm.prepare.Prepare(argv=['--data', '/dev/sdvv', '--filestore', '--bluestore']).main()
+        expected = 'Cannot use --filestore (filestore) with --bluestore (bluestore)'
+        assert expected in str(error)
+
+    def test_excludes_other_filestore_bluestore_flags(self, is_root):
+        with pytest.raises(RuntimeError) as error:
+            lvm.prepare.Prepare(argv=[
+                '--bluestore', '--data', '/dev/sdvv',
+                '--journal', '/dev/sf14',
+            ]).main()
+        expected = 'Cannot use --bluestore (bluestore) with --journal (filestore)'
+        assert expected in str(error)
+
+    def test_excludes_block_and_journal_flags(self, is_root):
+        with pytest.raises(RuntimeError) as error:
+            lvm.prepare.Prepare(argv=[
+                '--bluestore', '--data', '/dev/sdvv', '--block.db', 'vg/ceph1',
+                '--journal', '/dev/sf14',
+            ]).main()
+        expected = 'Cannot use --block.db (bluestore) with --journal (filestore)'
+        assert expected in str(error)
 
 
 class TestGetJournalLV(object):
@@ -75,4 +100,3 @@ class TestActivate(object):
         stdout, stderr = capsys.readouterr()
         assert 'optional arguments' in stdout
         assert 'positional arguments' in stdout
-
