@@ -1,5 +1,6 @@
-import pytest
 import argparse
+import pytest
+import sys
 from ceph_volume import exceptions
 from ceph_volume.util import arg_validators
 
@@ -51,3 +52,41 @@ class TestOSDPath(object):
         with pytest.raises(argparse.ArgumentError) as error:
             validator(tmppath)
         assert 'Required file (ceph_fsid) was not found in OSD' in str(error)
+
+
+class TestExcludeGroupOptions(object):
+
+    def setup(self):
+        self.parser = argparse.ArgumentParser()
+
+    def test_flags_in_one_group(self, monkeypatch):
+        monkeypatch.setattr(sys, 'argv', ['<prog>', '--filestore', '--bar'])
+        filestore_group = self.parser.add_argument_group('filestore')
+        bluestore_group = self.parser.add_argument_group('bluestore')
+        filestore_group.add_argument('--filestore')
+        bluestore_group.add_argument('--bluestore')
+
+        assert arg_validators.exclude_group_options(self.parser, ['filestore', 'bluestore']) is None
+
+    def test_flags_in_no_group(self, monkeypatch):
+        monkeypatch.setattr(sys, 'argv', ['<prog>', '--foo', '--bar'])
+        filestore_group = self.parser.add_argument_group('filestore')
+        bluestore_group = self.parser.add_argument_group('bluestore')
+        filestore_group.add_argument('--filestore')
+        bluestore_group.add_argument('--bluestore')
+
+        assert arg_validators.exclude_group_options(self.parser, ['filestore', 'bluestore']) is None
+
+    def test_flags_conflict(self, monkeypatch):
+        monkeypatch.setattr(sys, 'argv', ['<prog>', '--filestore', '--bluestore'])
+        filestore_group = self.parser.add_argument_group('filestore')
+        bluestore_group = self.parser.add_argument_group('bluestore')
+        filestore_group.add_argument('--filestore')
+        bluestore_group.add_argument('--bluestore')
+
+        with pytest.raises(RuntimeError) as error:
+            arg_validators.exclude_group_options(
+                self.parser, ['filestore', 'bluestore']
+            )
+
+        assert 'Cannot use --filestore (filestore) with --bluestore (bluestore)' in str(error)
